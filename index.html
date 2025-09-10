@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>功课记录板 · 云端版</title>
+  <style>
+    :root { --primary:#E9C46A; --text:#222; --muted:#666; --bg:#faf7ef; --card:#fff; --danger:#d33; --ok:#2a9d8f; }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family: -apple-system,BlinkMacSystemFont, "SF Pro Text","PingFang SC","Hiragino Sans GB","Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", "Noto Sans CJK SC", "Noto Sans CJK", sans-serif;}
+    .app{max-width:920px;margin:0 auto;padding:16px;}
+    header{display:flex;align-items:center;justify-content:space-between;padding:12px 0;}
+    h1{font-size:20px;margin:0;}
+    .muted{color:var(--muted);}
+    .btn{appearance:none;border:0;outline:0;background:var(--primary);color:#333;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600;box-shadow:0 2px 0 #d0b055;}
+    .btn:active{transform:translateY(1px);}
+    .btn.outline{background:#fff;border:1px solid #ddd;box-shadow:none;}
+    .btn.danger{background:var(--danger);color:#fff;box-shadow:0 2px 0 #b02;}
+    .btn.ok{background:var(--ok);color:#fff;box-shadow:0 2px 0 #1f7b6f;}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
+    .card{background:var(--card);border-radius:16px;padding:14px 14px 12px 14px;box-shadow:0 2px 0 rgba(0,0,0,.04);}
+    .card h3{margin:6px 0 2px;font-size:18px}
+    .kv{margin:10px 0 0;display:grid;grid-template-columns:1fr auto;gap:6px;font-size:14px}
+    .kv div:last-child{font-weight:700}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .pill{display:inline-flex;gap:6px;align-items:center;border:1px solid #eee;border-radius:24px;padding:6px 10px;background:#fff;font-size:12px;color:#333}
+    .section-title{display:flex;align-items:center;justify-content:space-between;margin:12px 2px 10px}
+    .code{font-family: ui-monospace,SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;background:#f2efe6;border-radius:8px;padding:6px 8px;font-size:12px;display:inline-block}
+    .input, select{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:10px;background:#fff;box-sizing:border-box;}
+    dialog{border:0;border-radius:16px;max-width:520px;width:92vw;padding:0;overflow:hidden}
+    dialog header{padding:14px 16px;background:#f6f3e7;border-bottom:1px solid #eee}
+    dialog main{padding:16px}
+    dialog footer{display:flex;gap:10px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #eee;background:#faf8f0}
+    .list{display:flex;flex-direction:column;gap:10px}
+    .item{display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #eee;border-radius:12px;padding:10px 12px}
+    .tag{background:#f2efe6;border-radius:10px;padding:2px 8px;margin-left:6px;font-size:12px}
+    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .small{font-size:12px}
+    .hidden{display:none!important}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>功课记录板 · 云端版</h1>
+      <div class="muted small">Supabase 实时读写 · 软删除 + 回收站 · 成员管理</div>
+    </div>
+    <div class="toolbar">
+      <button id="btnAddRecord" class="btn">＋ 添加记录</button>
+      <button id="btnAdmin" class="btn outline">管理员入口</button>
+    </div>
+  </header>
+
+  <section class="section-title">
+    <h2 style="margin:0;font-size:16px">成员</h2>
+    <div class="toolbar">
+      <span class="muted small">项目展示：静坐 + 自选至多 2 项</span>
+      <button id="btnRefresh" class="btn outline small">刷新</button>
+    </div>
+  </section>
+
+  <div id="membersGrid" class="grid"></div>
+
+  <dialog id="dlgRecord">
+    <header><strong>新增记录</strong></header>
+    <main>
+      <div class="list">
+        <label>成员
+          <select id="recMember"></select>
+        </label>
+        <label>项目
+          <select id="recItem">
+            <option value="GMZ">GMZ</option>
+            <option value="GY">GY</option>
+            <option value="FX">FX</option>
+            <option value="BZM">BZM</option>
+            <option value="SSYJ">SSYJ</option>
+            <option value="静坐">静坐</option>
+            <option value="全身运动">全身运动</option>
+          </select>
+        </label>
+        <label>数量 <input id="recQty" class="input" type="number" min="1" step="1" placeholder="请输入数量，如 1 / 30 / 500" /></label>
+        <label>单位 <input id="recUnit" class="input" type="text" value="次" /></label>
+        <label>备注 <input id="recNote" class="input" type="text" placeholder="可为空" /></label>
+      </div>
+    </main>
+    <footer>
+      <button class="btn outline" onclick="dlgRecord.close()">取消</button>
+      <button id="btnSubmitRecord" class="btn ok">提交</button>
+    </footer>
+  </dialog>
+
+  <dialog id="dlgAdmin">
+    <header><strong>管理员入口</strong></header>
+    <main id="adminContent">
+      <div id="adminLogin">
+        <div class="muted small" style="margin-bottom:8px">输入访问密码</div>
+        <input id="adminPwd" class="input" type="password" placeholder="请输入访问密码" />
+      </div>
+      <div id="adminPanel" class="hidden">
+        <h3 style="margin:6px 0 12px">成员管理</h3>
+        <div class="row" style="margin-bottom:8px">
+          <input id="newMemberName" class="input" style="flex:1" placeholder="输入成员姓名后添加">
+          <button id="btnAddMember" class="btn">＋ 添加成员</button>
+        </div>
+        <div id="membersAdmin" class="list"></div>
+      </div>
+    </main>
+    <footer>
+      <button class="btn outline" onclick="dlgAdmin.close()">关闭</button>
+      <button id="btnAdminOK" class="btn ok">确定</button>
+    </footer>
+  </dialog>
+
+  <dialog id="dlgMemberDetail">
+    <header><strong id="detailTitle">成员记录</strong></header>
+    <main>
+      <div class="toolbar" style="justify-content:space-between;margin-bottom:8px">
+        <div>
+          <button id="btnShowActive" class="btn outline small">正常</button>
+          <button id="btnShowDeleted" class="btn outline small">回收站</button>
+        </div>
+        <div class="muted small">点击记录可删除/还原</div>
+      </div>
+      <div id="detailList" class="list"></div>
+    </main>
+    <footer>
+      <button class="btn outline" onclick="dlgMemberDetail.close()">关闭</button>
+    </footer>
+  </dialog>
+</div>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+  // ====== 配置区 ======
+  const SUPABASE_URL = 'https://bpgzzgmghkcwpoalhrrd.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwZ3p6Z21naGtjd3BvYWxocnJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0OTEwMTgsImV4cCI6MjA3MzA2NzAxOH0.5PtBu34Gi0NjupUgVSQZqYWZdkfjVQFhucyfwLINI1g';
+  const ACCESS_PASSWORD = '1666'; // 管理员入口的访问密码（可改）
+  const FIXED_ITEM = '静坐';       // 卡片固定展示
+  const GROUP_ITEMS = ['GMZ','GY','FX','BZM','SSYJ','全身运动','静坐']; // 统计的可选项目
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // ====== 状态缓存 ======
+  let members = [];           // 所有成员（含禁用）
+  let membersActive = [];     // 仅 is_active = true
+  let picks = {};             // 每个卡片自选展示项目（保存在本地）
+  let isAdmin = false;        // 管理员模式
+  let currentDetailMember = null;
+  const PICKS_KEY = 'board_picks_v1';
+
+  // ====== DOM ======
+  const grid = document.getElementById('membersGrid');
+  const btnAddRecord = document.getElementById('btnAddRecord');
+  const btnAdmin = document.getElementById('btnAdmin');
+  const btnRefresh = document.getElementById('btnRefresh');
+  const dlgRecord = document.getElementById('dlgRecord');
+  const recMember = document.getElementById('recMember');
+  const recItem = document.getElementById('recItem');
+  const recQty = document.getElementById('recQty');
+  const recUnit = document.getElementById('recUnit');
+  const recNote = document.getElementById('recNote');
+  const btnSubmitRecord = document.getElementById('btnSubmitRecord');
+
+  const dlgAdmin = document.getElementById('dlgAdmin');
+  const adminPwd = document.getElementById('adminPwd');
+  const adminPanel = document.getElementById('adminPanel');
+  const btnAdminOK = document.getElementById('btnAdminOK');
+  const btnAddMember = document.getElementById('btnAddMember');
+  const newMemberName = document.getElementById('newMemberName');
+  const membersAdmin = document.getElementById('membersAdmin');
+
+  const dlgMemberDetail = document.getElementById('dlgMemberDetail');
+  const detailTitle = document.getElementById('detailTitle');
+  const detailList = document.getElementById('detailList');
+  const btnShowActive = document.getElementById('btnShowActive');
+  const btnShowDeleted = document.getElementById('btnShowDeleted');
+
+  // ====== 工具 ======
+  const delay = ms => new Promise(r=>setTimeout(r, ms));
+  function toast(msg){
+    alert(msg);
+  }
+  function loadPicks(){
+    try{ picks = JSON.parse(localStorage.getItem(PICKS_KEY)||'{}'); }catch{ picks = {}; }
+  }
+  function savePicks(){
+    localStorage.setItem(PICKS_KEY, JSON.stringify(picks));
+  }
+  function pickKey(id){ return `m_${id}` }
+  function getMemberPicks(id){
+    const key = pickKey(id);
+    return picks[key] ?? [];
+  }
+  function setMemberPicks(id, arr){
+    const key = pickKey(id);
+    picks[key] = arr.slice(0,2);
+    savePicks();
+    render();
+  }
+
+  // ====== 数据访问 ======
+  async function fetchMembers(){
+    const { data, error } = await supabase
+      .from('members')
+      .select('*')
+      .order('id', { ascending: true });
+    if(error){ console.error(error); toast('读取成员失败'); return;}
+    members = data || [];
+    membersActive = members.filter(m=>m.is_active!==false);
+    // 填充到“新增记录”里
+    recMember.innerHTML = membersActive.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  }
+
+  async function fetchStatsByMember(memberId){
+    // 读取该成员所有未删除记录
+    const { data, error } = await supabase
+      .from('records')
+      .select('id,item,quantity,unit,note,submitted_at,is_deleted')
+      .eq('member_id', memberId);
+    if(error){ console.error(error); return {records:[],stats:{}}; }
+    const records = (data||[]).filter(r=>!r.is_deleted);
+    const stats = {};
+    for(const r of records){
+      stats[r.item] = (stats[r.item]||0) + (Number(r.quantity)||0);
+    }
+    return { records, stats };
+  }
+
+  async function fetchRecent(memberId, limit=3){
+    const { data, error } = await supabase
+      .from('records')
+      .select('id,item,quantity,unit,submitted_at,is_deleted')
+      .eq('member_id', memberId)
+      .order('submitted_at', { ascending:false })
+      .limit(limit);
+    if(error){ console.error(error); return []; }
+    return data||[];
+  }
+
+  async function insertRecord({member_id,item,quantity,unit,note}){
+    const { error } = await supabase
+      .from('records')
+      .insert({ member_id, item, quantity:Number(quantity)||0, unit, note, is_deleted:false });
+    if(error){ console.error(error); toast('提交失败'); }
+  }
+
+  async function softDelete(recordId, val=true){
+    const { error } = await supabase.from('records').update({ is_deleted:val }).eq('id', recordId);
+    if(error){ console.error(error); toast('操作失败'); }
+  }
+
+  async function addMember(name){
+    const { error } = await supabase.from('members').insert({ name, is_active:true });
+    if(error){ console.error(error); toast('添加失败'); }
+  }
+  async function renameMember(id, name){
+    const { error } = await supabase.from('members').update({ name }).eq('id', id);
+    if(error){ console.error(error); toast('改名失败'); }
+  }
+  async function disableMember(id, active){
+    const { error } = await supabase.from('members').update({ is_active:active }).eq('id', id);
+    if(error){ console.error(error); toast('操作失败'); }
+  }
+
+  // ====== 渲染 ======
+  async function render(){
+    loadPicks();
+    grid.innerHTML = '';
+    for(const m of membersActive){
+      const { stats } = await fetchStatsByMember(m.id);
+      const recent = await fetchRecent(m.id, 3);
+      const chosen = getMemberPicks(m.id);
+      const extra = chosen.filter(x=>x!==FIXED_ITEM).slice(0,2);
+      const kvs = [];
+      kvs.push([`${FIXED_ITEM} 总数`, stats[FIXED_ITEM]||0]);
+      for(const k of extra){
+        kvs.push([`${k} 总数`, stats[k]||0]);
+      }
+      const card = document.createElement('div');
+      card.className='card';
+      card.innerHTML = `
+        <div class="row" style="justify-content:space-between">
+          <h3>${m.name}</h3>
+          <button class="btn outline small" data-view="${m.id}">查看记录</button>
+        </div>
+        <div class="kv">
+          ${kvs.map(kv=>`<div class="muted small">${kv[0]}</div><div>${kv[1]}</div>`).join('')}
+        </div>
+        <div class="row" style="margin-top:10px;flex-wrap:wrap">
+          <span class="muted small">最近三次提交：</span>
+          ${recent.map(r=>`<span class="pill">${r.item} <span class="tag">${r.quantity}${r.unit||''}</span></span>`).join('') || '<span class="muted small">无</span>'}
+        </div>
+        <div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap">
+          <span class="muted small">自选展示（最多 2 项）</span>
+          ${GROUP_ITEMS.map(it=>`
+            <label class="pill" style="cursor:pointer">
+              <input type="checkbox" ${chosen.includes(it)?'checked':''} data-pick-id="${m.id}" value="${it}" />
+              ${it}
+            </label>
+          `).join('')}
+        </div>
+      `;
+      grid.appendChild(card);
+      // 事件
+      card.querySelector(`[data-view="${m.id}"]`).addEventListener('click', ()=>openMemberDetail(m));
+      card.querySelectorAll('input[type="checkbox"][data-pick-id]').forEach(chk=>{
+        chk.addEventListener('change', (e)=>{
+          const id = Number(e.target.dataset.pickId);
+          let arr = getMemberPicks(id);
+          if(e.target.checked){
+            arr = Array.from(new Set([...arr, e.target.value]));
+          }else{
+            arr = arr.filter(x=>x!==e.target.value);
+          }
+          if(arr.length>2){
+            // 保留最近勾选的 2 个
+            arr = arr.slice(-2);
+          }
+          setMemberPicks(id, arr);
+        });
+      });
+    }
+  }
+
+  async function openMemberDetail(m){
+    currentDetailMember = m;
+    detailTitle.textContent = `${m.name} · 记录`;
+    await fillDetailList(false);
+    dlgMemberDetail.showModal();
+  }
+
+  async function fillDetailList(showDeleted){
+    const { data, error } = await supabase
+      .from('records')
+      .select('id,item,quantity,unit,note,submitted_at,is_deleted')
+      .eq('member_id', currentDetailMember.id)
+      .eq('is_deleted', showDeleted)
+      .order('submitted_at', { ascending:false });
+    if(error){ console.error(error); toast('读取记录失败'); return; }
+    detailList.innerHTML = (data||[]).map(r=>`
+      <div class="item">
+        <div>
+          <div><strong>${r.item}</strong> <span class="tag">${r.quantity}${r.unit||''}</span></div>
+          <div class="muted small">${new Date(r.submitted_at).toLocaleString()}</div>
+          ${r.note?`<div class="muted small">${r.note}</div>`:''}
+        </div>
+        <div class="row">
+          ${showDeleted
+            ? `<button class="btn ok small" data-restore="${r.id}">还原</button>`
+            : `<button class="btn danger small" data-del="${r.id}">删除</button>`}
+        </div>
+      </div>
+    `).join('') || '<div class="muted small">暂无记录</div>';
+
+    detailList.querySelectorAll('[data-del]').forEach(btn=>{
+      btn.addEventListener('click', async e=>{
+        const id = Number(e.currentTarget.dataset.del);
+        if(!confirm('确认将此记录移入回收站？')) return;
+        await softDelete(id, true);
+        await fillDetailList(false);
+      });
+    });
+    detailList.querySelectorAll('[data-restore]').forEach(btn=>{
+      btn.addEventListener('click', async e=>{
+        const id = Number(e.currentTarget.dataset.restore);
+        await softDelete(id, false);
+        await fillDetailList(true);
+      });
+    });
+  }
+
+  // ====== 事件绑定 ======
+  btnAddRecord.addEventListener('click', ()=>{
+    recQty.value = ''; recNote.value=''; recUnit.value='次';
+    if(membersActive[0]) recMember.value = membersActive[0].id;
+    dlgRecord.showModal();
+  });
+  btnSubmitRecord.addEventListener('click', async ()=>{
+    if(!recMember.value){ toast('请选择成员'); return;}
+    if(!recItem.value){ toast('请选择项目'); return;}
+    if(!recQty.value){ toast('请填写数量'); return;}
+    await insertRecord({ member_id:Number(recMember.value), item:recItem.value, quantity:Number(recQty.value), unit:recUnit.value.trim()||'次', note:recNote.value.trim() });
+    dlgRecord.close();
+    await fetchMembers(); // 以便刷新下拉
+    await render();
+  });
+  btnRefresh.addEventListener('click', async ()=>{ await fetchMembers(); await render(); });
+
+  btnAdmin.addEventListener('click', ()=>{
+    adminPwd.value=''; adminPanel.classList.add('hidden'); dlgAdmin.showModal();
+  });
+  btnAdminOK.addEventListener('click', ()=>{
+    if(isAdmin || adminPwd.value === ACCESS_PASSWORD){
+      isAdmin = true;
+      adminPanel.classList.remove('hidden');
+      refreshAdminMembers();
+    }else{
+      toast('密码不正确');
+    }
+  });
+  btnAddMember.addEventListener('click', async ()=>{
+    const name = newMemberName.value.trim();
+    if(!name){ toast('请输入成员姓名'); return;}
+    await addMember(name);
+    newMemberName.value='';
+    await fetchMembers();
+    refreshAdminMembers();
+    await render();
+  });
+
+  function refreshAdminMembers(){
+    membersAdmin.innerHTML = members.map(m=>`
+      <div class="item">
+        <div class="row">
+          <strong>${m.name}</strong>
+          ${m.is_active===false?'<span class="tag">已禁用</span>':''}
+        </div>
+        <div class="row">
+          <button class="btn outline small" data-rename="${m.id}">改名</button>
+          ${m.is_active===false
+            ? `<button class="btn ok small" data-enable="${m.id}">启用</button>`
+            : `<button class="btn danger small" data-disable="${m.id}">禁用</button>`}
+        </div>
+      </div>
+    `).join('') || '<div class="muted small">暂无成员</div>';
+    membersAdmin.querySelectorAll('[data-rename]').forEach(btn=>btn.addEventListener('click', async e=>{
+      const id = Number(e.currentTarget.dataset.rename);
+      const m = members.find(x=>x.id===id);
+      const name = prompt('新名字', m?.name||'');
+      if(!name) return;
+      await renameMember(id, name.trim());
+      await fetchMembers(); refreshAdminMembers(); await render();
+    }));
+    membersAdmin.querySelectorAll('[data-disable]').forEach(btn=>btn.addEventListener('click', async e=>{
+      const id = Number(e.currentTarget.dataset.disable);
+      await disableMember(id, false);
+      await fetchMembers(); refreshAdminMembers(); await render();
+    }));
+    membersAdmin.querySelectorAll('[data-enable]').forEach(btn=>btn.addEventListener('click', async e=>{
+      const id = Number(e.currentTarget.dataset.enable);
+      await disableMember(id, true);
+      await fetchMembers(); refreshAdminMembers(); await render();
+    }));
+  }
+
+  btnShowActive.addEventListener('click', ()=>fillDetailList(false));
+  btnShowDeleted.addEventListener('click', ()=>fillDetailList(true));
+
+  // ====== 启动 ======
+  (async function init(){
+    loadPicks();
+    await fetchMembers();
+    await render();
+  })();
+</script>
+</body>
+</html>
