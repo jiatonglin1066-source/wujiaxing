@@ -288,10 +288,26 @@ let currentViewMemberId = null;
 function startApp(){ loadAll(); bindRealtime(); }
 
 /*------------------------- 数据加载 -------------------------*/
+async function fetchAllRecords() {
+  const pageSize = 1000;
+  const rows = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("records")
+      .select("id,member_id,item,quantity,note,submitted_at,is_deleted")
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  return { data: rows, error: null };
+}
+
 async function loadAll() {
   const [mRes, rRes] = await Promise.all([
     supabase.from("members").select("*").order("id"),
-    supabase.from("records").select("id,member_id,item,quantity,note,submitted_at,is_deleted")
+    fetchAllRecords()
   ]);
   if (mRes.error) { console.error(mRes.error); return; }
   if (rRes.error) { console.error(rRes.error); return; }
